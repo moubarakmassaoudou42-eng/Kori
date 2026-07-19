@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String         @id @default(cuid())
+  email              String         @unique
+  passwordHash       String?
+  role               Role           @default(CLIENT)
+  authProvider       AuthProvider   @default(CREDENTIALS)
+  nom                String
+  prenom             String
+  photoUrl           String?
+  telephone          String?
+  pays               String?
+  langue             String         @default("fr")
+  emailVerifie       Boolean        @default(false)
+  emailVerifieToken  String?
+  resetToken         String?
+  resetTokenExpire   DateTime?
+  titreProfessionnel String?
+  description        String?
+  competences        String[]
+  languesParlees     String[]
+  cvUrl              String?
+  niveauVendeur      NiveauVendeur  @default(NOUVEAU)
+  soldeDisponible    Int            @default(0)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  avisLaisses        Avis[]         @relation("ClientAvis")
+  avisRecus          Avis[]         @relation("FreelanceAvis")
+  commandesPassees   Commande[]     @relation("ClientCommandes")
+  commandesRecues    Commande[]     @relation("FreelanceCommandes")
+  conversationsA     Conversation[] @relation("ParticipantA")
+  conversationsB     Conversation[] @relation("ParticipantB")
+  favoris            Favori[]
+  messagesEnvoyes    Message[]      @relation("MessagesEnvoyes")
+  notifications      Notification[]
+  paiements          Paiement[]
+  retraits           Retrait[]
+  services           Service[]      @relation("FreelanceServices")
+
+  @@map("users")
+}
+
+model Categorie {
+  id             String          @id
+  nom            String
+  icone          String?
+  couleur        String?
+  ordre          Int             @default(0)
+  services       Service[]
+  sousCategories SousCategorie[]
+
+  @@map("categories")
+}
+
+model SousCategorie {
+  id          String    @id @default(cuid())
+  nom         String
+  categorieId String
+  services    Service[]
+  categorie   Categorie @relation(fields: [categorieId], references: [id], onDelete: Cascade)
+
+  @@index([categorieId])
+  @@map("sous_categories")
+}
+
+model Service {
+  id              String         @id @default(cuid())
+  titre           String
+  description     String
+  images          String[]
+  videoUrl        String?
+  tags            String[]
+  delaiJours      Int
+  revisions       Int            @default(1)
+  faq             Json?
+  statut          StatutService  @default(BROUILLON)
+  freelanceId     String
+  categorieId     String
+  sousCategorieId String?
+  vues            Int            @default(0)
+  noteMoyenne     Float          @default(0)
+  nombreAvis      Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  avis            Avis[]
+  commandes       Commande[]
+  favoris         Favori[]
+  packages        Package[]
+  categorie       Categorie      @relation(fields: [categorieId], references: [id])
+  freelance       User           @relation("FreelanceServices", fields: [freelanceId], references: [id], onDelete: Cascade)
+  sousCategorie   SousCategorie? @relation(fields: [sousCategorieId], references: [id])
+
+  @@index([categorieId])
+  @@index([freelanceId])
+  @@map("services")
+}
+
+model Package {
+  id               String      @id @default(cuid())
+  type             TypePackage
+  nom              String
+  description      String
+  prix             Int
+  delaiJours       Int
+  revisions        Int
+  livraisonExpress Boolean     @default(false)
+  optionsIncluses  String[]
+  serviceId        String
+  commandes        Commande[]
+  service          Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("packages")
+}
+
+model Commande {
+  id             String         @id @default(cuid())
+  reference      String         @unique
+  serviceId      String
+  packageId      String
+  clientId       String
+  freelanceId    String
+  prix           Int
+  statut         StatutCommande @default(EN_ATTENTE)
+  instructions   String?
+  fichiersLivres String[]
+  dateEcheance   DateTime
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  avis           Avis?
+  client         User           @relation("ClientCommandes", fields: [clientId], references: [id])
+  freelance      User           @relation("FreelanceCommandes", fields: [freelanceId], references: [id])
+  package        Package        @relation(fields: [packageId], references: [id])
+  service        Service        @relation(fields: [serviceId], references: [id])
+  paiement       Paiement?
+
+  @@index([clientId])
+  @@index([freelanceId])
+  @@index([statut])
+  @@map("commandes")
+}
+
+model Avis {
+  id          String   @id @default(cuid())
+  note        Int
+  commentaire String
+  photos      String[]
+  reponse     String?
+  commandeId  String   @unique
+  serviceId   String
+  clientId    String
+  freelanceId String
+  createdAt   DateTime @default(now())
+  client      User     @relation("ClientAvis", fields: [clientId], references: [id])
+  commande    Commande @relation(fields: [commandeId], references: [id])
+  freelance   User     @relation("FreelanceAvis", fields: [freelanceId], references: [id])
+  service     Service  @relation(fields: [serviceId], references: [id])
+
+  @@index([serviceId])
+  @@index([freelanceId])
+  @@map("avis")
+}
+
+model Favori {
+  id        String   @id @default(cuid())
+  clientId  String
+  serviceId String
+  createdAt DateTime @default(now())
+  client    User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, serviceId])
+  @@map("favoris")
+}
+
+model Conversation {
+  id             String    @id @default(cuid())
+  participantAId String
+  participantBId String
+  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  participantA   User      @relation("ParticipantA", fields: [participantAId], references: [id])
+  participantB   User      @relation("ParticipantB", fields: [participantBId], references: [id])
+  messages       Message[]
+
+  @@unique([participantAId, participantBId])
+  @@map("conversations")
+}
+
+model Message {
+  id              String       @id @default(cuid())
+  conversationId  String
+  expediteurId    String
+  contenu         String?
+  pieceJointeUrl  String?
+  typePieceJointe String?
+  lu              Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  expediteur      User         @relation("MessagesEnvoyes", fields: [expediteurId], references: [id])
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+model Paiement {
+  id              String          @id @default(cuid())
+  commandeId      String          @unique
+  clientId        String
+  montant         Int
+  commission      Int
+  methode         MethodePaiement
+  statut          StatutPaiement  @default(EN_ATTENTE)
+  referenceStripe String?
+  numeroFacture   String          @unique
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  client          User            @relation(fields: [clientId], references: [id])
+  commande        Commande        @relation(fields: [commandeId], references: [id])
+
+  @@map("paiements")
+}
+
+model Retrait {
+  id          String          @id @default(cuid())
+  freelanceId String
+  montant     Int
+  methode     MethodePaiement
+  statut      StatutRetrait   @default(EN_ATTENTE)
+  createdAt   DateTime        @default(now())
+  traiteLe    DateTime?
+  freelance   User            @relation(fields: [freelanceId], references: [id])
+
+  @@index([freelanceId])
+  @@map("retraits")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      TypeNotification
+  titre     String
+  contenu   String
+  lienUrl   String?
+  lu        Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+enum Role {
+  CLIENT
+  FREELANCE
+  ADMIN
+}
+
+enum AuthProvider {
+  CREDENTIALS
+  GOOGLE
+  FACEBOOK
+}
+
+enum StatutService {
+  ACTIF
+  EN_PAUSE
+  BROUILLON
+}
+
+enum NiveauVendeur {
+  NOUVEAU
+  CONFIRME
+  TOP_VENDEUR
+}
+
+enum StatutCommande {
+  EN_ATTENTE
+  ACCEPTEE
+  EN_COURS
+  LIVREE
+  REVISION_DEMANDEE
+  TERMINEE
+  ANNULEE
+}
+
+enum StatutPaiement {
+  EN_ATTENTE
+  RETENU
+  LIBERE
+  REMBOURSE
+}
+
+enum StatutRetrait {
+  EN_ATTENTE
+  TRAITE
+  REJETE
+}
+
+enum MethodePaiement {
+  CARTE_BANCAIRE
+  AIRTEL_MONEY
+  ORANGE_MONEY
+  VIREMENT_BANCAIRE
+}
+
+enum TypeNotification {
+  NOUVELLE_COMMANDE
+  COMMANDE_LIVREE
+  COMMANDE_VALIDEE
+  NOUVEAU_MESSAGE
+  NOUVEL_AVIS
+  PAIEMENT_RECU
+  RETRAIT_TRAITE
+  SYSTEME
+}
+
+enum TypePackage {
+  BASIQUE
+  STANDARD
+  PREMIUM
+}
